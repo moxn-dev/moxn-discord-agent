@@ -1,0 +1,37 @@
+{
+  "name": "moxn-discord-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A durable, subscription-backed Codex assistant for a private Discord channel, Temporal Cloud, and Moxn Context OS",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "npm run typecheck && npm test && npm run build",
+    "dev": "npm run build && node --enable-source-maps dist/index.js",
+    "preflight": "npm run build && node --enable-source-maps dist/preflight.js",
+    "secrets:scan": "node scripts/scan-secrets.mjs",
+    "start": "node --enable-source-maps dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@moxn/context-cli": "0.12.0",
+    "@moxn/mcp-kb": "0.4.1",
+    "@openai/codex-sdk": "0.147.0",
+    "@temporalio/client": "1.22.0",
+    "@temporalio/common": "1.22.0",
+    "@temporalio/worker": "1.22.0",
+    "@temporalio/workflow": "1.22.0",
+    "discord.js": "14.27.0",
+    "dotenv": "16.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.32",
+    "typescript": "5.8.3",
+    "vitest": "3.2.7"
+  }
+}

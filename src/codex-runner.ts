@@ -133,6 +133,35 @@ function parseResponse(raw: string): StructuredAgentResponse {
   return response;
 }
 
+function errorChainText(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof Error) {
+      parts.push(current.message);
+      current = current.cause;
+    } else {
+      parts.push(String(current));
+      break;
+    }
+  }
+
+  return parts.join("\n").toLowerCase();
+}
+
+export function isUnusableCodexThreadError(error: unknown): boolean {
+  const text = errorChainText(error);
+  return (
+    text.includes("thread/resume") &&
+    (text.includes("failed to resolve rollout path") ||
+      text.includes("file does not exist") ||
+      text.includes("not found"))
+  );
+}
+
 export class CodexRunner {
   private readonly codex: Codex;
   private readonly config: AgentConfig;
@@ -184,7 +213,7 @@ export class CodexRunner {
       webSearchMode: "disabled" as const,
       approvalPolicy: "never" as const,
     };
-    const thread = input.codexThreadId
+    let thread = input.codexThreadId
       ? this.codex.resumeThread(input.codexThreadId, threadOptions)
       : this.codex.startThread(threadOptions);
 
@@ -202,7 +231,22 @@ export class CodexRunner {
       }
     }
 
-    const turn = await thread.run(codexInput, { outputSchema: responseSchema });
+    let turn;
+    try {
+      turn = await thread.run(codexInput, { outputSchema: responseSchema });
+    } catch (error) {
+      if (!input.codexThreadId || !isUnusableCodexThreadError(error)) {
+        throw error;
+      }
+
+      // Thread rollout paths are local to CODEX_HOME. If an operator migrates
+      // persistent agent state between a host and a container with a different
+      // mount path, preserve the durable Discord context and begin a new Codex
+      // thread instead of failing every subsequent channel turn.
+      console.warn("Codex thread state is unavailable; starting a fresh thread");
+      thread = this.codex.startThread(threadOptions);
+      turn = await thread.run(codexInput, { outputSchema: responseSchema });
+    }
     const response = parseResponse(turn.finalResponse);
     const threadId = thread.id;
     if (!threadId) throw new Error("Codex did not return a thread ID");

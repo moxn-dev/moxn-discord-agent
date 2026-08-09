@@ -8,9 +8,9 @@ Discord Gateway connection, but no inbound application port.
 
 For a personal deployment, a small Linux VM is the clearest default:
 
-1. **AWS Lightsail or EC2 + Docker Compose** — recommended reference path. It is
-   easy to understand, gives Codex a normal persistent filesystem, and avoids
-   adding managed-container storage and interactive-login complexity.
+1. **AWS Lightsail Instance or EC2 + Docker Compose** — recommended reference
+   path. It is easy to understand, gives Codex a normal persistent filesystem,
+   and avoids adding managed-container storage and interactive-login complexity.
 2. **Railway, Fly.io, or a Render background worker** — lower-operations options.
    Attach a persistent volume, keep one instance always running, and use the
    provider's secret store.
@@ -31,11 +31,47 @@ cp .env.example .env
 docker compose build
 ```
 
-Authenticate the isolated Codex home in the persistent volume:
+Authenticate the isolated Codex home in the persistent volume. Choose exactly
+one method.
+
+### ChatGPT subscription
 
 ```bash
 docker compose run --rm --entrypoint sh agent -lc \
   'mkdir -p "$CODEX_HOME" && ./node_modules/.bin/codex login --device-auth'
+```
+
+Complete the device flow using the ChatGPT account and workspace whose Codex
+allowance this assistant should use.
+
+### OpenAI API key
+
+On the Linux host, read the key without placing it in shell history, then send it
+to Codex over standard input:
+
+```bash
+read -rsp "OpenAI API key: " OPENAI_API_KEY
+printf '\n'
+printf '%s' "$OPENAI_API_KEY" | \
+  docker compose run --rm -T \
+    --entrypoint ./node_modules/.bin/codex agent login --with-api-key
+unset OPENAI_API_KEY
+```
+
+Do not add `OPENAI_API_KEY` to `.env`. The login command stores the credential in
+the persistent, private `CODEX_HOME`. OpenAI Platform billing applies to this
+method; it does not consume included ChatGPT plan credits. See OpenAI's
+[authentication guide](https://learn.chatgpt.com/docs/auth) for details.
+
+### Verify and start
+
+Confirm the stored authentication method and run all read-only service checks:
+
+```bash
+docker compose run --rm \
+  --entrypoint ./node_modules/.bin/codex agent login status
+docker compose run --rm agent \
+  node --enable-source-maps dist/preflight.js
 ```
 
 Start the one replica:
@@ -48,22 +84,55 @@ docker compose logs -f agent
 Stop cleanly with `docker compose down`. Do not add `--volumes` unless you intend
 to delete the Codex login, sessions, runtime workspace, and attachment inbox.
 
-## AWS Lightsail or EC2
+## AWS Lightsail Instance
+
+Use a **Lightsail Instance** (a Linux virtual machine), not Lightsail Container
+Service. This reference deployment assumes SSH access, Docker Compose, and a
+host-managed persistent Docker volume. The bot exposes no HTTP service.
 
 For this low-throughput but occasionally memory-bursty process, start with 2 GB
 RAM on x86-64 Linux. A 1 GB host can work, but Codex plus the Temporal workflow
 bundle has less headroom.
 
-1. Create an Ubuntu or Debian VM.
-2. Restrict inbound access to SSH from your address, or use AWS Systems Manager.
-   The agent needs no public application port.
-3. Install Docker Engine and its Compose plugin from Docker's official packages.
-4. Clone this repository and create `.env` with mode `0600`.
-5. Run the Docker Compose authentication and startup commands above.
-6. Enable provider disk encryption, automatic VM snapshots, and a billing alert.
+1. In Lightsail, [create a Linux instance](https://docs.aws.amazon.com/lightsail/latest/userguide/getting-started-with-amazon-lightsail.html)
+   using an **OS Only** current Ubuntu LTS image and the 2 GB RAM plan.
+2. In the instance's Networking tab, remove unneeded HTTP/HTTPS rules and
+   restrict SSH to your IP address. Keep Lightsail browser SSH enabled if you use
+   it. The agent needs no public application port or static IP.
+3. Connect over SSH and install Docker Engine plus the Docker Compose plugin from
+   [Docker's Ubuntu instructions](https://docs.docker.com/engine/install/ubuntu/).
+4. Clone and configure the agent:
+
+   ```bash
+   git clone https://github.com/moxn-dev/moxn-discord-agent.git
+   cd moxn-discord-agent
+   cp .env.example .env
+   chmod 600 .env
+   nano .env
+   docker compose build
+   ```
+
+5. Run either the ChatGPT subscription or API-key login above, followed by the
+   authentication status and preflight commands.
+6. Start the agent and inspect its logs:
+
+   ```bash
+   docker compose up -d
+   docker compose logs -f agent
+   ```
+
+7. Enable Lightsail automatic snapshots and a billing alert. The Compose named
+   volume lives on the instance disk, so deleting an unsnapshotted instance also
+   deletes the agent's Codex credentials and local sessions.
 
 Docker's `restart: unless-stopped` brings the process back after crashes and host
 reboots. Back up the `agent-data` volume as sensitive material.
+
+## EC2
+
+The same Docker Compose flow works on a small Ubuntu or Debian EC2 instance.
+Prefer Lightsail for this experiment unless you already need EC2 networking,
+IAM, or attached-storage controls.
 
 ## Railway
 
@@ -99,7 +168,7 @@ stateful-worker shape.
 
 The `/data` volume contains:
 
-- Codex subscription credentials and session logs;
+- ChatGPT or OpenAI API-key credentials and Codex session logs;
 - the runtime copy of `AGENTS.md`;
 - downloaded Discord attachments.
 

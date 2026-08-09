@@ -1,9 +1,10 @@
 # Moxn Discord Agent
 
-A single-user Discord assistant powered by a Codex subscription, Temporal Cloud,
-and Moxn Context OS. It watches one private Discord channel, maintains one durable
+A single-user Discord assistant powered by Codex, Temporal Cloud, and Moxn
+Context OS. It watches one private Discord channel, maintains one durable
 channel-level conversation, understands image attachments, and can read or write
-Moxn through the published Context CLI.
+Moxn through the published Context CLI. Codex can authenticate with either a
+ChatGPT subscription or an OpenAI Platform API key.
 
 This is an open-source personal-assistant baseline. It is intentionally not a
 multi-user authorization system or hardened multi-tenant sandbox.
@@ -15,7 +16,7 @@ Discord Gateway ──► Node worker ──► Temporal Cloud
                        │             durable queue, checkpoint,
                        │             summary, and Codex thread ID
                        │
-                       ├──► Codex SDK ──► ChatGPT/Codex subscription
+                       ├──► Codex SDK ──► ChatGPT subscription or OpenAI API
                        │        │
                        │        ├──► context CLI ──► Moxn
                        │        └──► optional stdio Moxn MCP
@@ -43,7 +44,8 @@ does not need a public HTTP port.
 ## Requirements
 
 - Node.js 20 or newer.
-- A ChatGPT plan with Codex access and a local Codex login.
+- Either a ChatGPT plan with Codex access or an OpenAI Platform account with API
+  billing enabled.
 - A Discord application installed in a private server.
 - A Temporal Cloud namespace and API key.
 - A Moxn workspace and API key.
@@ -79,14 +81,40 @@ secret manager or an external environment file.
 
 ```bash
 npm ci
-mkdir -p ~/.moxn/discord-agent/codex
-CODEX_HOME=~/.moxn/discord-agent/codex \
-  ./node_modules/.bin/codex login --device-auth
+export CODEX_HOME="$HOME/.moxn/discord-agent/codex"
+mkdir -p "$CODEX_HOME"
+```
+
+Choose one login method.
+
+**ChatGPT subscription:**
+
+```bash
+./node_modules/.bin/codex login --device-auth
+```
+
+**OpenAI API key:** set `OPENAI_API_KEY` without putting it in shell history,
+then pipe it into the one-time login command:
+
+```bash
+printf '%s' "$OPENAI_API_KEY" | \
+  ./node_modules/.bin/codex login --with-api-key
+unset OPENAI_API_KEY
+```
+
+API-key usage is billed through the OpenAI Platform account rather than using
+included ChatGPT plan credits. See OpenAI's
+[authentication guide](https://learn.chatgpt.com/docs/auth) for the distinction.
+Confirm the selected method with:
+
+```bash
+./node_modules/.bin/codex login status
 ```
 
 The isolated `CODEX_HOME` must live on persistent storage. It contains the
-subscription login and resumable Codex session state; never commit or bake it
-into an image.
+login credential and resumable Codex session state; never commit or bake it into
+an image. Do not add `OPENAI_API_KEY` to this project's `.env`; the running agent
+uses the protected Codex login store.
 
 ### 4. Verify and run
 
@@ -95,9 +123,9 @@ npm run preflight
 npm run dev
 ```
 
-`preflight` performs read-only Discord, Temporal Cloud, and Moxn CLI connection
-checks. `dev` builds and starts the Worker. On later runs, use `npm start` after
-building.
+`preflight` checks Codex authentication and performs read-only Discord, Temporal
+Cloud, and Moxn CLI connection checks. `dev` builds and starts the Worker. On
+later runs, use `npm start` after building.
 
 The first launch checkpoints the newest existing Discord message rather than
 replaying the entire channel. Send a fresh message to begin.
@@ -141,7 +169,7 @@ Codex never receives the Discord bot token.
 
 `AGENT_DATA_DIR` defaults to `~/.moxn/discord-agent` and contains:
 
-- `codex/`: isolated Codex credentials and sessions;
+- `codex/`: isolated ChatGPT or API-key credentials and Codex sessions;
 - `workspace/`: runtime `AGENTS.md` and agent scratch space;
 - `inbox/`: downloaded Discord attachments.
 

@@ -2,7 +2,7 @@
   "name": "moxn-discord-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "A durable, subscription-backed Codex assistant for a private Discord channel, Temporal Cloud, and Moxn Context OS",
+  "description": "A durable Codex assistant for a private Discord channel, Temporal Cloud, and Moxn Context OS",
   "license": "MIT",
   "type": "module",
   "engines": {

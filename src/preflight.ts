@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Connection } from "@temporalio/client";
 import { REST, Routes } from "discord.js";
@@ -8,6 +10,9 @@ import { loadConfig } from "./config.js";
 import { prepareLocalState } from "./local-state.js";
 
 const execFileAsync = promisify(execFile);
+const codexCliEntry = fileURLToPath(
+  new URL("../node_modules/@openai/codex/bin/codex.js", import.meta.url),
+);
 
 loadDotenv({ path: process.env.AGENT_ENV_FILE?.trim() || ".env" });
 
@@ -71,16 +76,44 @@ async function checkMoxn(config: ReturnType<typeof loadConfig>) {
   console.info(`PASS Moxn: Context CLI; ${filesystems.length} filesystem(s)`);
 }
 
+export function describeCodexAuthStatus(output: string): string {
+  const normalized = output.toLowerCase();
+  if (normalized.includes("api key")) return "API key";
+  if (normalized.includes("chatgpt")) return "ChatGPT";
+  return "authenticated";
+}
+
+async function checkCodex(config: ReturnType<typeof loadConfig>) {
+  const { stdout, stderr } = await execFileAsync(
+    process.execPath,
+    [codexCliEntry, "login", "status"],
+    {
+      env: createAgentEnvironment(config),
+      timeout: 30_000,
+      maxBuffer: 100_000,
+    },
+  );
+  console.info(
+    `PASS Codex: ${describeCodexAuthStatus(`${stdout}\n${stderr}`)}`,
+  );
+}
+
 async function main() {
   const config = loadConfig();
   await prepareLocalState(config);
+  await checkCodex(config);
   await checkDiscord(config);
   await checkTemporal(config);
   await checkMoxn(config);
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`Preflight failed: ${message}`);
-  process.exitCode = 1;
-});
+if (
+  process.argv[1] &&
+  fileURLToPath(import.meta.url) === resolve(process.argv[1])
+) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Preflight failed: ${message}`);
+    process.exitCode = 1;
+  });
+}

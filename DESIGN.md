@@ -20,7 +20,7 @@ process location, not the workflow architecture.
 | Message text/metadata, queue, checkpoint | Temporal Workflow | Replay and crash recovery |
 | Rolling summary and Codex thread ID | Temporal Workflow | Resume one channel-level conversation |
 | Photo/file bytes | Private persistent inbox | Keep large payloads out of workflow history |
-| Codex login and session files | Isolated persistent `CODEX_HOME` | Resume subscription-backed Codex threads |
+| Codex login and session files | Isolated persistent `CODEX_HOME` | Resume Codex threads across restarts |
 | Persona | Checked-in `agent/AGENTS.md`, copied locally | User-controlled and reviewable |
 | Moxn documents/media | Moxn | Durable context and full read/write capability |
 
@@ -55,7 +55,7 @@ then selected agent failures could be retried safely.
 
 - Run exactly one replica. Multiple Discord Gateway consumers would receive the
   same events even though Temporal deduplicates already-recorded messages.
-- Persist `AGENT_DATA_DIR`. It contains the Codex subscription login, resumable
+- Persist `AGENT_DATA_DIR`. It contains the Codex login credential, resumable
   session data, the runtime persona, and downloaded attachments.
 - Do not use request-driven functions that sleep between HTTP requests. The
   Discord Gateway and Temporal Worker both hold long-lived outbound connections.

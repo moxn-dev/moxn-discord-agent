@@ -1,6 +1,8 @@
+import { heartbeat } from "@temporalio/activity";
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import type { CodexRunner } from "./codex-runner.js";
 import { splitDiscordMessage } from "./discord-utils.js";
+import { AGENT_TURN_HEARTBEAT_INTERVAL_MS } from "./temporal-lifecycle.js";
 import type {
   DeliverDiscordActionInput,
   ProcessChannelTurnInput,
@@ -20,16 +22,29 @@ async function requireTextChannel(
 export function createActivities(discord: Client, codex: CodexRunner) {
   return {
     async processChannelTurn(input: ProcessChannelTurnInput) {
-      const channel = await requireTextChannel(discord, input.channelId);
-      await channel.sendTyping();
-      const typingTimer = setInterval(() => {
-        void channel.sendTyping().catch(() => undefined);
-      }, 8_000);
-      typingTimer.unref();
+      // Heartbeat independently of model or tool progress. A long Codex turn is
+      // healthy as long as this Worker remains alive; if the process disappears,
+      // Temporal can detect it promptly instead of waiting for the full turn
+      // timeout.
+      heartbeat();
+      const heartbeatTimer = setInterval(
+        heartbeat,
+        AGENT_TURN_HEARTBEAT_INTERVAL_MS,
+      );
+      heartbeatTimer.unref();
+
+      let typingTimer: NodeJS.Timeout | undefined;
       try {
+        const channel = await requireTextChannel(discord, input.channelId);
+        await channel.sendTyping();
+        typingTimer = setInterval(() => {
+          void channel.sendTyping().catch(() => undefined);
+        }, 8_000);
+        typingTimer.unref();
         return await codex.run(input);
       } finally {
-        clearInterval(typingTimer);
+        clearInterval(heartbeatTimer);
+        if (typingTimer) clearInterval(typingTimer);
       }
     },
 

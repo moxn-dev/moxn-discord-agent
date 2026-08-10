@@ -137,6 +137,12 @@ reliably create a second namespace inside an ordinary unprivileged container.
 In that mode Docker is the command boundary, so mount only the private agent data
 the assistant is intended to access and never mount the Docker socket.
 
+Agent turns may run for up to 30 minutes. While a turn is active, the Worker
+heartbeats every 10 seconds; Temporal considers it lost after 45 seconds without
+a heartbeat. Container shutdown drains an in-flight turn for up to five minutes
+before forcing recovery, so use the provided Compose stop grace period or give a
+manual `docker stop` at least 330 seconds.
+
 ### 4. Verify and run
 
 ```bash

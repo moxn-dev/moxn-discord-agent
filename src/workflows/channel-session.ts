@@ -16,6 +16,10 @@ import type {
   DiscordChannelMessage,
   ProcessChannelTurnInput,
 } from "../types.js";
+import {
+  AGENT_TURN_HEARTBEAT_TIMEOUT,
+  AGENT_TURN_START_TO_CLOSE_TIMEOUT,
+} from "../temporal-lifecycle.js";
 
 interface ChannelActivities {
   processChannelTurn(input: ProcessChannelTurnInput): Promise<AgentTurnResult>;
@@ -23,7 +27,8 @@ interface ChannelActivities {
 }
 
 const { processChannelTurn } = proxyActivities<ChannelActivities>({
-  startToCloseTimeout: "30 minutes",
+  startToCloseTimeout: AGENT_TURN_START_TO_CLOSE_TIMEOUT,
+  heartbeatTimeout: AGENT_TURN_HEARTBEAT_TIMEOUT,
   retry: { maximumAttempts: 1 },
 });
 const { deliverDiscordAction } = proxyActivities<ChannelActivities>({

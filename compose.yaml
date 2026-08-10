@@ -10,7 +10,9 @@ services:
       CODEX_HOME: /data/codex
     volumes:
       - agent-data:/data
-    stop_grace_period: 45s
+    # The Worker drains in-flight agent turns for five minutes, then has a
+    # short force-shutdown window. Keep Docker's deadline longer than both.
+    stop_grace_period: 5m30s
 
 volumes:
   agent-data:

@@ -90,6 +90,13 @@ docker compose logs -f agent
 Stop cleanly with `docker compose down`. Do not add `--volumes` unless you intend
 to delete the Codex login, sessions, runtime workspace, and attachment inbox.
 
+The Compose service gives the Temporal Worker 5 minutes and 30 seconds to stop.
+The Worker stops polling, allows an in-flight agent turn up to five minutes to
+finish, and then forces shutdown. Active turns heartbeat every 10 seconds with a
+45-second Heartbeat Timeout, so a crashed or force-stopped worker is detected
+without waiting for the full 30-minute turn timeout. If you run Docker without
+Compose, use `docker stop --time 330 <container>` for the same drain behavior.
+
 ## AWS Lightsail Instance
 
 Use a **Lightsail Instance** (a Linux virtual machine), not Lightsail Container

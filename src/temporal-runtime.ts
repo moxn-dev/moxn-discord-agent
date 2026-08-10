@@ -1,13 +1,39 @@
 import { Client, Connection } from "@temporalio/client";
-import { NativeConnection, Worker } from "@temporalio/worker";
+import {
+  NativeConnection,
+  Worker,
+  type WorkerOptions,
+} from "@temporalio/worker";
 import { fileURLToPath } from "node:url";
 import type { AgentConfig } from "./config.js";
 import type { AgentActivities } from "./activities.js";
+import {
+  WORKER_SHUTDOWN_FORCE_TIME,
+  WORKER_SHUTDOWN_GRACE_TIME,
+} from "./temporal-lifecycle.js";
 
 export interface TemporalRuntime {
   client: Client;
   worker: Worker;
   close(): Promise<void>;
+}
+
+export function createWorkerOptions(
+  config: AgentConfig,
+  activities: AgentActivities,
+  connection: NativeConnection,
+): WorkerOptions {
+  return {
+    connection,
+    namespace: config.temporal.namespace,
+    taskQueue: config.temporal.taskQueue,
+    workflowsPath: fileURLToPath(
+      new URL("./workflows/channel-session.js", import.meta.url),
+    ),
+    activities,
+    shutdownGraceTime: WORKER_SHUTDOWN_GRACE_TIME,
+    shutdownForceTime: WORKER_SHUTDOWN_FORCE_TIME,
+  };
 }
 
 export async function createTemporalRuntime(
@@ -27,15 +53,9 @@ export async function createTemporalRuntime(
     connection: clientConnection,
     namespace: config.temporal.namespace,
   });
-  const worker = await Worker.create({
-    connection: workerConnection,
-    namespace: config.temporal.namespace,
-    taskQueue: config.temporal.taskQueue,
-    workflowsPath: fileURLToPath(
-      new URL("./workflows/channel-session.js", import.meta.url),
-    ),
-    activities,
-  });
+  const worker = await Worker.create(
+    createWorkerOptions(config, activities, workerConnection),
+  );
 
   return {
     client,

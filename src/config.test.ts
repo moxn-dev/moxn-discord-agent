@@ -23,6 +23,7 @@ describe("configuration", () => {
     vi.stubEnv("DISCORD_ALLOWED_BOT_IDS", "");
     vi.stubEnv("CODEX_MODEL", "");
     vi.stubEnv("CODEX_REASONING_EFFORT", "");
+    vi.stubEnv("CODEX_SANDBOX_MODE", "");
     vi.stubEnv("AGENT_DATA_DIR", "/tmp/moxn-discord-agent-test");
   });
 
@@ -46,12 +47,23 @@ describe("configuration", () => {
     expect(loadConfig().codex).toEqual({
       model: "gpt-5.6-terra",
       reasoningEffort: "high",
+      sandboxMode: "workspace-write",
     });
   });
 
   it("rejects an unsupported Codex reasoning setting", () => {
     vi.stubEnv("CODEX_REASONING_EFFORT", "extreme");
     expect(() => loadConfig()).toThrow(/CODEX_REASONING_EFFORT/);
+  });
+
+  it("accepts an explicit Codex sandbox mode", () => {
+    vi.stubEnv("CODEX_SANDBOX_MODE", "danger-full-access");
+    expect(loadConfig().codex.sandboxMode).toBe("danger-full-access");
+  });
+
+  it("rejects an unsupported Codex sandbox mode", () => {
+    vi.stubEnv("CODEX_SANDBOX_MODE", "container");
+    expect(() => loadConfig()).toThrow(/CODEX_SANDBOX_MODE/);
   });
 
   it("supports a channel-wide Discord allow-list without a user ID", () => {

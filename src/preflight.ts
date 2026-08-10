@@ -97,7 +97,7 @@ async function checkCodex(config: ReturnType<typeof loadConfig>) {
     },
   );
   console.info(
-    `PASS Codex: ${describeCodexAuthStatus(`${stdout}\n${stderr}`)}; model ${config.codex.model ?? "Codex default"}; reasoning ${config.codex.reasoningEffort ?? "Codex default"}`,
+    `PASS Codex: ${describeCodexAuthStatus(`${stdout}\n${stderr}`)}; model ${config.codex.model ?? "Codex default"}; reasoning ${config.codex.reasoningEffort ?? "Codex default"}; sandbox ${config.codex.sandboxMode}`,
   );
 }
 

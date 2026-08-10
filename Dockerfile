@@ -27,7 +27,13 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/agent ./agent
 
-RUN mkdir -p /data && chown node:node /data
+# Codex command tools start a login shell, which may rebuild PATH rather than
+# preserving the SDK process override. Expose the pinned project-local Context
+# CLI on the standard container PATH so agent turns and preflight use the same
+# installed version.
+RUN ln -s /app/node_modules/.bin/context /usr/local/bin/context \
+    && mkdir -p /data \
+    && chown node:node /data
 USER node
 VOLUME ["/data"]
 

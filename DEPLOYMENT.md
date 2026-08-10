@@ -31,6 +31,12 @@ cp .env.example .env
 docker compose build
 ```
 
+Set `CODEX_SANDBOX_MODE=danger-full-access` in `.env` for the containerized
+worker. This disables Codex's nested Bubblewrap sandbox, which ordinary Docker
+containers cannot initialize, and relies on the container as the outer command
+boundary. Keep host bind mounts narrow, never mount the Docker socket, and do not
+run the container as privileged.
+
 Authenticate the isolated Codex home in the persistent volume. Choose exactly
 one method.
 

@@ -46,6 +46,14 @@ const codexReasoningEfforts = [
 
 export type CodexReasoningEffort = (typeof codexReasoningEfforts)[number];
 
+const codexSandboxModes = [
+  "read-only",
+  "workspace-write",
+  "danger-full-access",
+] as const;
+
+export type CodexSandboxMode = (typeof codexSandboxModes)[number];
+
 function optionalCodexReasoningEffort(): CodexReasoningEffort | undefined {
   const value = optional("CODEX_REASONING_EFFORT");
   if (!value) return undefined;
@@ -55,6 +63,16 @@ function optionalCodexReasoningEffort(): CodexReasoningEffort | undefined {
     );
   }
   return value as CodexReasoningEffort;
+}
+
+function codexSandboxMode(): CodexSandboxMode {
+  const value = optional("CODEX_SANDBOX_MODE") || "workspace-write";
+  if (!codexSandboxModes.includes(value as CodexSandboxMode)) {
+    throw new Error(
+      `CODEX_SANDBOX_MODE must be one of: ${codexSandboxModes.join(", ")}`,
+    );
+  }
+  return value as CodexSandboxMode;
 }
 
 function requiredSnowflake(name: string): string {
@@ -91,6 +109,7 @@ export interface AgentConfig {
   codex: {
     model: string | undefined;
     reasoningEffort: CodexReasoningEffort | undefined;
+    sandboxMode: CodexSandboxMode;
   };
   discord: {
     botToken: string;
@@ -139,6 +158,7 @@ export function loadConfig(): AgentConfig {
     codex: {
       model: optional("CODEX_MODEL"),
       reasoningEffort: optionalCodexReasoningEffort(),
+      sandboxMode: codexSandboxMode(),
     },
     discord: {
       botToken: required("DISCORD_BOT_TOKEN"),

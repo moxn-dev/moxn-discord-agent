@@ -131,6 +131,12 @@ The installed Codex SDK accepts `minimal`, `low`, `medium`, `high`, or `xhigh`
 reasoning effort. Model access still depends on the authenticated ChatGPT or
 OpenAI Platform account.
 
+`CODEX_SANDBOX_MODE` defaults to `workspace-write`. When the worker runs inside
+Docker, set it to `danger-full-access`: Codex's Linux Bubblewrap sandbox cannot
+reliably create a second namespace inside an ordinary unprivileged container.
+In that mode Docker is the command boundary, so mount only the private agent data
+the assistant is intended to access and never mount the Docker socket.
+
 ### 4. Verify and run
 
 ```bash

@@ -210,9 +210,9 @@ export class CodexRunner {
         : {}),
       workingDirectory: this.config.local.agentWorkspace,
       skipGitRepoCheck: true,
-      sandboxMode: "workspace-write" as const,
-      // The pinned Context CLI runs inside the sandbox and needs outbound
-      // access to Moxn. Web search remains disabled.
+      sandboxMode: this.config.codex.sandboxMode,
+      // The pinned Context CLI needs outbound access to Moxn. Web search
+      // remains disabled independently of the command sandbox mode.
       networkAccessEnabled: true,
       webSearchMode: "disabled" as const,
       approvalPolicy: "never" as const,

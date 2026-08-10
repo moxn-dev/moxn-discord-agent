@@ -211,10 +211,11 @@ export class CodexRunner {
       workingDirectory: this.config.local.agentWorkspace,
       skipGitRepoCheck: true,
       sandboxMode: this.config.codex.sandboxMode,
-      // The pinned Context CLI needs outbound access to Moxn. Web search
-      // remains disabled independently of the command sandbox mode.
+      // The pinned Context CLI needs outbound access to Moxn. Web search is a
+      // separate, explicit operator choice because retrieved pages are
+      // untrusted input to an assistant with write access.
       networkAccessEnabled: true,
-      webSearchMode: "disabled" as const,
+      webSearchMode: this.config.codex.webSearchMode,
       approvalPolicy: "never" as const,
     };
     let thread = input.codexThreadId

@@ -39,6 +39,7 @@ does not need a public HTTP port.
 - One durable channel workflow and one resumable Codex thread.
 - Startup backfill for messages received while the process was offline.
 - Direct image input plus local-file uploads to Moxn.
+- Optional live Codex web search for public research.
 - Context CLI installed as a pinned npm dependency; no global install required.
 - Optional published stdio MCP server—no HTTP MCP bridge.
 - Structured replies, typing status, Discord message splitting, and retry-safe
@@ -136,6 +137,20 @@ Docker, set it to `danger-full-access`: Codex's Linux Bubblewrap sandbox cannot
 reliably create a second namespace inside an ordinary unprivileged container.
 In that mode Docker is the command boundary, so mount only the private agent data
 the assistant is intended to access and never mount the Docker socket.
+
+Web search is off by default. To let the assistant research current public
+information, enable Codex's
+[built-in live search](https://learn.chatgpt.com/docs/config-file/config-reference)
+through this app's environment setting:
+
+```env
+CODEX_WEB_SEARCH_MODE=live
+```
+
+No separate search API key is required. `cached` is also accepted when current
+results are unnecessary. Search results and fetched pages are untrusted content;
+the default persona tells the assistant to use them as evidence rather than as
+instructions.
 
 Agent turns may run for up to 30 minutes. While a turn is active, the Worker
 heartbeats every 10 seconds; Temporal considers it lost after 45 seconds without
@@ -246,7 +261,8 @@ process with long-lived outbound connections.
 - Allow-list peer bots sparingly. Two agents that reflexively answer each other
   can create an expensive reply loop; persona-level restraint remains important.
 - The Moxn API key has the user's full intended privileges.
-- Codex has outbound network access so the Context CLI can reach Moxn.
+- Codex has outbound network access so the Context CLI can reach Moxn; optional
+  web search should be enabled only when the deployment needs public research.
 - Message and file content can contain prompt injection. This is not a security
   boundary for mutually untrusted users.
 - Never commit `.env`, the agent data directory, Codex credentials, or downloaded

@@ -54,6 +54,10 @@ const codexSandboxModes = [
 
 export type CodexSandboxMode = (typeof codexSandboxModes)[number];
 
+const codexWebSearchModes = ["disabled", "cached", "live"] as const;
+
+export type CodexWebSearchMode = (typeof codexWebSearchModes)[number];
+
 function optionalCodexReasoningEffort(): CodexReasoningEffort | undefined {
   const value = optional("CODEX_REASONING_EFFORT");
   if (!value) return undefined;
@@ -73,6 +77,16 @@ function codexSandboxMode(): CodexSandboxMode {
     );
   }
   return value as CodexSandboxMode;
+}
+
+function codexWebSearchMode(): CodexWebSearchMode {
+  const value = optional("CODEX_WEB_SEARCH_MODE") || "disabled";
+  if (!codexWebSearchModes.includes(value as CodexWebSearchMode)) {
+    throw new Error(
+      `CODEX_WEB_SEARCH_MODE must be one of: ${codexWebSearchModes.join(", ")}`,
+    );
+  }
+  return value as CodexWebSearchMode;
 }
 
 function requiredSnowflake(name: string): string {
@@ -110,6 +124,7 @@ export interface AgentConfig {
     model: string | undefined;
     reasoningEffort: CodexReasoningEffort | undefined;
     sandboxMode: CodexSandboxMode;
+    webSearchMode: CodexWebSearchMode;
   };
   discord: {
     botToken: string;
@@ -159,6 +174,7 @@ export function loadConfig(): AgentConfig {
       model: optional("CODEX_MODEL"),
       reasoningEffort: optionalCodexReasoningEffort(),
       sandboxMode: codexSandboxMode(),
+      webSearchMode: codexWebSearchMode(),
     },
     discord: {
       botToken: required("DISCORD_BOT_TOKEN"),

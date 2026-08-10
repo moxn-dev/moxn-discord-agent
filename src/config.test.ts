@@ -19,6 +19,7 @@ describe("configuration", () => {
       vi.stubEnv(name, value);
     }
     vi.stubEnv("MOXN_MCP_ENABLED", "");
+    vi.stubEnv("DISCORD_ALLOW_ALL_USERS", "");
     vi.stubEnv("AGENT_DATA_DIR", "/tmp/moxn-discord-agent-test");
   });
 
@@ -34,6 +35,14 @@ describe("configuration", () => {
   it("accepts an explicit MCP opt-in", () => {
     vi.stubEnv("MOXN_MCP_ENABLED", "true");
     expect(loadConfig().moxn.mcpEnabled).toBe(true);
+  });
+
+  it("supports a channel-wide Discord allow-list without a user ID", () => {
+    vi.stubEnv("DISCORD_ALLOW_ALL_USERS", "true");
+    vi.stubEnv("DISCORD_ALLOWED_USER_ID", "");
+    const config = loadConfig();
+    expect(config.discord.allowAllUsers).toBe(true);
+    expect(config.discord.allowedUserId).toBeUndefined();
   });
 
   it("rejects ambiguous boolean configuration", () => {

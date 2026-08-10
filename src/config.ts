@@ -44,12 +44,21 @@ function requiredSnowflake(name: string): string {
   return value;
 }
 
+function optionalSnowflake(name: string): string | undefined {
+  const value = optional(name);
+  if (value && !/^\d+$/.test(value)) {
+    throw new Error(`${name} must be a numeric Discord ID`);
+  }
+  return value;
+}
+
 export interface AgentConfig {
   discord: {
     botToken: string;
     guildId: string;
     channelId: string;
-    allowedUserId: string;
+    allowAllUsers: boolean;
+    allowedUserId: string | undefined;
     attachmentMaxBytes: number;
     backfillLimit: number;
   };
@@ -84,13 +93,17 @@ export function loadConfig(): AgentConfig {
     optional("AGENT_DATA_DIR") ||
       resolve(homedir(), ".moxn", "discord-agent"),
   );
+  const allowAllDiscordUsers = boolean("DISCORD_ALLOW_ALL_USERS", false);
 
   return {
     discord: {
       botToken: required("DISCORD_BOT_TOKEN"),
       guildId: requiredSnowflake("DISCORD_GUILD_ID"),
       channelId: requiredSnowflake("DISCORD_CHANNEL_ID"),
-      allowedUserId: requiredSnowflake("DISCORD_ALLOWED_USER_ID"),
+      allowAllUsers: allowAllDiscordUsers,
+      allowedUserId: allowAllDiscordUsers
+        ? optionalSnowflake("DISCORD_ALLOWED_USER_ID")
+        : requiredSnowflake("DISCORD_ALLOWED_USER_ID"),
       attachmentMaxBytes: positiveInteger(
         "DISCORD_ATTACHMENT_MAX_BYTES",
         25 * 1024 * 1024,

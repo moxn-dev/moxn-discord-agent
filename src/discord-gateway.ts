@@ -64,7 +64,8 @@ export function isAllowedDiscordMessage(
     !message.author.bot &&
     message.guildId === config.discord.guildId &&
     message.channelId === config.discord.channelId &&
-    message.author.id === config.discord.allowedUserId
+    (config.discord.allowAllUsers ||
+      message.author.id === config.discord.allowedUserId)
   );
 }
 
@@ -188,8 +189,11 @@ export class DiscordGateway {
     const latestMessageId = latest.first()?.id ?? null;
     await this.ensureWorkflow(latestMessageId);
     await this.backfill(channel);
+    const audience = this.config.discord.allowAllUsers
+      ? "all non-bot users"
+      : `only user ${this.config.discord.allowedUserId}`;
     console.info(
-      `Discord agent ready as ${this.discord.user?.tag ?? "unknown bot"}; accepting only user ${this.config.discord.allowedUserId} in channel ${this.config.discord.channelId}`,
+      `Discord agent ready as ${this.discord.user?.tag ?? "unknown bot"}; accepting ${audience} in channel ${this.config.discord.channelId}`,
     );
   }
 

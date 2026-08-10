@@ -1,7 +1,7 @@
 # Moxn Discord Agent
 
-A single-user Discord assistant powered by Codex, Temporal Cloud, and Moxn
-Context OS. It watches one private Discord channel, maintains one durable
+A Discord assistant powered by Codex, Temporal Cloud, and Moxn Context OS. It
+watches one private Discord channel, maintains one durable
 channel-level conversation, understands image attachments, and can read or write
 Moxn through the published Context CLI. Codex can authenticate with either a
 ChatGPT subscription or an OpenAI Platform API key.
@@ -31,7 +31,8 @@ does not need a public HTTP port.
 
 ## Features
 
-- One allow-listed Discord user, guild, and channel.
+- One allow-listed Discord guild and channel, with either one permitted user or
+  all non-bot channel participants through an explicit opt-in.
 - No mention required; Codex chooses whether to reply, react, or stay silent.
 - One durable channel workflow and one resumable Codex thread.
 - Startup backfill for messages received while the process was offline.
@@ -176,10 +177,13 @@ Edit [agent/AGENTS.md](agent/AGENTS.md) to change the assistant's voice, attenti
 policy, and Moxn workflow. Startup copies it into the private runtime workspace.
 Restart after changing the file.
 
-The agent receives all messages from the configured user in the configured
-channel. Direct questions normally get a reply; ambient notes may receive a
-reaction or no response. The Discord orchestrator posts the final action, so
-Codex never receives the Discord bot token.
+The agent receives every admitted human message in the configured channel.
+Direct mentions always get a response; other direct questions normally do,
+while ambient notes may receive a reaction or no response. By default only
+`DISCORD_ALLOWED_USER_ID` is admitted. Set `DISCORD_ALLOW_ALL_USERS=true` to use
+the configured guild/channel as the boundary and admit every non-bot participant.
+The Discord orchestrator posts the final action, so Codex never receives the
+Discord bot token.
 
 ## Persistent state
 
@@ -209,7 +213,8 @@ process with long-lived outbound connections.
 ## Security notes
 
 - Run exactly one replica.
-- Keep the Discord channel private and allow-list one user.
+- Keep the Discord channel private. Retain the single-user default unless every
+  participant in that channel is trusted to invoke the agent and its Moxn access.
 - The Moxn API key has the user's full intended privileges.
 - Codex has outbound network access so the Context CLI can reach Moxn.
 - Message and file content can contain prompt injection. This is not a security

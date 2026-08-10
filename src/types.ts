@@ -15,6 +15,8 @@ export interface DiscordChannelMessage {
   channelId: string;
   authorId: string;
   authorName: string;
+  /** Optional for compatibility with messages already stored in Temporal. */
+  authorIsBot?: boolean;
   content: string;
   createdAt: string;
   mentionedBot: boolean;

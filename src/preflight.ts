@@ -36,6 +36,9 @@ async function checkDiscord(config: ReturnType<typeof loadConfig>) {
   if (channel.guild_id !== config.discord.guildId) {
     throw new Error("Configured Discord channel does not belong to the guild");
   }
+  if (config.discord.allowedBotIds.includes(identity.id)) {
+    throw new Error("DISCORD_ALLOWED_BOT_IDS must not include this bot itself");
+  }
   console.info(
     `PASS Discord: ${identity.username ?? identity.id}; #${channel.name ?? channel.id}`,
   );
@@ -94,7 +97,7 @@ async function checkCodex(config: ReturnType<typeof loadConfig>) {
     },
   );
   console.info(
-    `PASS Codex: ${describeCodexAuthStatus(`${stdout}\n${stderr}`)}`,
+    `PASS Codex: ${describeCodexAuthStatus(`${stdout}\n${stderr}`)}; model ${config.codex.model ?? "Codex default"}; reasoning ${config.codex.reasoningEffort ?? "Codex default"}`,
   );
 }
 

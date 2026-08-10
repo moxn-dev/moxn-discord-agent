@@ -20,6 +20,9 @@ describe("configuration", () => {
     }
     vi.stubEnv("MOXN_MCP_ENABLED", "");
     vi.stubEnv("DISCORD_ALLOW_ALL_USERS", "");
+    vi.stubEnv("DISCORD_ALLOWED_BOT_IDS", "");
+    vi.stubEnv("CODEX_MODEL", "");
+    vi.stubEnv("CODEX_REASONING_EFFORT", "");
     vi.stubEnv("AGENT_DATA_DIR", "/tmp/moxn-discord-agent-test");
   });
 
@@ -37,12 +40,36 @@ describe("configuration", () => {
     expect(loadConfig().moxn.mcpEnabled).toBe(true);
   });
 
+  it("accepts explicit Codex model and reasoning settings", () => {
+    vi.stubEnv("CODEX_MODEL", "gpt-5.6-terra");
+    vi.stubEnv("CODEX_REASONING_EFFORT", "high");
+    expect(loadConfig().codex).toEqual({
+      model: "gpt-5.6-terra",
+      reasoningEffort: "high",
+    });
+  });
+
+  it("rejects an unsupported Codex reasoning setting", () => {
+    vi.stubEnv("CODEX_REASONING_EFFORT", "extreme");
+    expect(() => loadConfig()).toThrow(/CODEX_REASONING_EFFORT/);
+  });
+
   it("supports a channel-wide Discord allow-list without a user ID", () => {
     vi.stubEnv("DISCORD_ALLOW_ALL_USERS", "true");
     vi.stubEnv("DISCORD_ALLOWED_USER_ID", "");
     const config = loadConfig();
     expect(config.discord.allowAllUsers).toBe(true);
     expect(config.discord.allowedUserId).toBeUndefined();
+  });
+
+  it("parses an explicit Discord bot allow-list", () => {
+    vi.stubEnv("DISCORD_ALLOWED_BOT_IDS", "400, 401,400");
+    expect(loadConfig().discord.allowedBotIds).toEqual(["400", "401"]);
+  });
+
+  it("rejects an invalid Discord bot allow-list", () => {
+    vi.stubEnv("DISCORD_ALLOWED_BOT_IDS", "400,snow");
+    expect(() => loadConfig()).toThrow(/DISCORD_ALLOWED_BOT_IDS/);
   });
 
   it("rejects ambiguous boolean configuration", () => {

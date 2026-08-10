@@ -36,6 +36,27 @@ function boolean(name: string, fallback: boolean): boolean {
   throw new Error(`${name} must be true or false`);
 }
 
+const codexReasoningEfforts = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const;
+
+export type CodexReasoningEffort = (typeof codexReasoningEfforts)[number];
+
+function optionalCodexReasoningEffort(): CodexReasoningEffort | undefined {
+  const value = optional("CODEX_REASONING_EFFORT");
+  if (!value) return undefined;
+  if (!codexReasoningEfforts.includes(value as CodexReasoningEffort)) {
+    throw new Error(
+      `CODEX_REASONING_EFFORT must be one of: ${codexReasoningEfforts.join(", ")}`,
+    );
+  }
+  return value as CodexReasoningEffort;
+}
+
 function requiredSnowflake(name: string): string {
   const value = required(name);
   if (!/^\d+$/.test(value)) {
@@ -52,13 +73,32 @@ function optionalSnowflake(name: string): string | undefined {
   return value;
 }
 
+function snowflakeList(name: string): string[] {
+  const raw = optional(name);
+  if (!raw) return [];
+  const values = [...new Set(raw.split(",").map((value) => value.trim()))].filter(
+    Boolean,
+  );
+  for (const value of values) {
+    if (!/^\d+$/.test(value)) {
+      throw new Error(`${name} must contain comma-separated numeric Discord IDs`);
+    }
+  }
+  return values;
+}
+
 export interface AgentConfig {
+  codex: {
+    model: string | undefined;
+    reasoningEffort: CodexReasoningEffort | undefined;
+  };
   discord: {
     botToken: string;
     guildId: string;
     channelId: string;
     allowAllUsers: boolean;
     allowedUserId: string | undefined;
+    allowedBotIds: string[];
     attachmentMaxBytes: number;
     backfillLimit: number;
   };
@@ -96,6 +136,10 @@ export function loadConfig(): AgentConfig {
   const allowAllDiscordUsers = boolean("DISCORD_ALLOW_ALL_USERS", false);
 
   return {
+    codex: {
+      model: optional("CODEX_MODEL"),
+      reasoningEffort: optionalCodexReasoningEffort(),
+    },
     discord: {
       botToken: required("DISCORD_BOT_TOKEN"),
       guildId: requiredSnowflake("DISCORD_GUILD_ID"),
@@ -104,6 +148,7 @@ export function loadConfig(): AgentConfig {
       allowedUserId: allowAllDiscordUsers
         ? optionalSnowflake("DISCORD_ALLOWED_USER_ID")
         : requiredSnowflake("DISCORD_ALLOWED_USER_ID"),
+      allowedBotIds: snowflakeList("DISCORD_ALLOWED_BOT_IDS"),
       attachmentMaxBytes: positiveInteger(
         "DISCORD_ATTACHMENT_MAX_BYTES",
         25 * 1024 * 1024,

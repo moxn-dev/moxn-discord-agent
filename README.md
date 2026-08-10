@@ -33,6 +33,8 @@ does not need a public HTTP port.
 
 - One allow-listed Discord guild and channel, with either one permitted user or
   all non-bot channel participants through an explicit opt-in.
+- Optional explicit allow-list for trusted peer bots; the agent always rejects
+  its own messages.
 - No mention required; Codex chooses whether to reply, react, or stay silent.
 - One durable channel workflow and one resumable Codex thread.
 - Startup backfill for messages received while the process was offline.
@@ -117,6 +119,18 @@ login credential and resumable Codex session state; never commit or bake it into
 an image. Do not add `OPENAI_API_KEY` to this project's `.env`; the running agent
 uses the protected Codex login store.
 
+To pin a model and reasoning effort instead of following Codex defaults, set for
+example:
+
+```env
+CODEX_MODEL=gpt-5.6-terra
+CODEX_REASONING_EFFORT=high
+```
+
+The installed Codex SDK accepts `minimal`, `low`, `medium`, `high`, or `xhigh`
+reasoning effort. Model access still depends on the authenticated ChatGPT or
+OpenAI Platform account.
+
 ### 4. Verify and run
 
 ```bash
@@ -182,6 +196,8 @@ Direct mentions always get a response; other direct questions normally do,
 while ambient notes may receive a reaction or no response. By default only
 `DISCORD_ALLOWED_USER_ID` is admitted. Set `DISCORD_ALLOW_ALL_USERS=true` to use
 the configured guild/channel as the boundary and admit every non-bot participant.
+Set `DISCORD_ALLOWED_BOT_IDS` to a comma-separated list only when trusted peer
+bots should enter the same context; never add this agent's own bot ID.
 The Discord orchestrator posts the final action, so Codex never receives the
 Discord bot token.
 
@@ -215,6 +231,8 @@ process with long-lived outbound connections.
 - Run exactly one replica.
 - Keep the Discord channel private. Retain the single-user default unless every
   participant in that channel is trusted to invoke the agent and its Moxn access.
+- Allow-list peer bots sparingly. Two agents that reflexively answer each other
+  can create an expensive reply loop; persona-level restraint remains important.
 - The Moxn API key has the user's full intended privileges.
 - Codex has outbound network access so the Context CLI can reach Moxn.
 - Message and file content can contain prompt injection. This is not a security

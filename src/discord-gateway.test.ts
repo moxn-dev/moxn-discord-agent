@@ -8,6 +8,7 @@ const config = {
     channelId: "200",
     allowAllUsers: false,
     allowedUserId: "300",
+    allowedBotIds: [],
     attachmentMaxBytes: 1,
     backfillLimit: 1,
   },
@@ -34,6 +35,31 @@ describe("Discord ingress authorization", () => {
         channelWide,
       ),
     ).toBe(true);
+  });
+
+  it("accepts an explicitly allow-listed bot but never itself", () => {
+    const botAware = {
+      discord: { ...config.discord, allowedBotIds: ["400"] },
+    };
+    const botMessage = {
+      ...allowed,
+      author: { bot: true, id: "400" },
+    };
+    expect(isAllowedDiscordMessage(botMessage, botAware, "999")).toBe(true);
+    expect(isAllowedDiscordMessage(botMessage, botAware, "400")).toBe(false);
+  });
+
+  it("rejects bot authors that are not explicitly allow-listed", () => {
+    const botAware = {
+      discord: { ...config.discord, allowedBotIds: ["400"] },
+    };
+    expect(
+      isAllowedDiscordMessage(
+        { ...allowed, author: { bot: true, id: "401" } },
+        botAware,
+        "999",
+      ),
+    ).toBe(false);
   });
 
   it.each([

@@ -77,7 +77,7 @@ function renderMessage(message: DiscordChannelMessage): string {
     return `  - ${attachment.filename}: download unavailable (${attachment.downloadError ?? "unknown error"})`;
   });
   return [
-    `[${message.createdAt}] ${message.authorName} (message ${message.id}${message.mentionedBot ? ", mentioned you" : ""}${message.replyToMessageId ? `, replying to ${message.replyToMessageId}` : ""})`,
+    `[${message.createdAt}] ${message.authorName}${message.authorIsBot ? " [bot]" : ""} (message ${message.id}${message.mentionedBot ? ", mentioned you" : ""}${message.replyToMessageId ? `, replying to ${message.replyToMessageId}` : ""})`,
     message.content || "(no text)",
     ...(attachmentLines.length > 0 ? ["Attachments:", ...attachmentLines] : []),
   ].join("\n");
@@ -204,6 +204,10 @@ export class CodexRunner {
 
   async run(input: ProcessChannelTurnInput): Promise<AgentTurnResult> {
     const threadOptions = {
+      ...(this.config.codex.model ? { model: this.config.codex.model } : {}),
+      ...(this.config.codex.reasoningEffort
+        ? { modelReasoningEffort: this.config.codex.reasoningEffort }
+        : {}),
       workingDirectory: this.config.local.agentWorkspace,
       skipGitRepoCheck: true,
       sandboxMode: "workspace-write" as const,

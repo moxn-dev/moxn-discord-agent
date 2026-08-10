@@ -59,13 +59,23 @@ interface DiscordMessageIdentity {
 export function isAllowedDiscordMessage(
   message: DiscordMessageIdentity,
   config: Pick<AgentConfig, "discord">,
+  currentBotId?: string,
 ): boolean {
+  if (
+    message.guildId !== config.discord.guildId ||
+    message.channelId !== config.discord.channelId
+  ) {
+    return false;
+  }
+  if (message.author.bot) {
+    return (
+      message.author.id !== currentBotId &&
+      config.discord.allowedBotIds.includes(message.author.id)
+    );
+  }
   return (
-    !message.author.bot &&
-    message.guildId === config.discord.guildId &&
-    message.channelId === config.discord.channelId &&
-    (config.discord.allowAllUsers ||
-      message.author.id === config.discord.allowedUserId)
+    config.discord.allowAllUsers ||
+    message.author.id === config.discord.allowedUserId
   );
 }
 
@@ -92,7 +102,7 @@ export class DiscordGateway {
   }
 
   private isAllowedMessage(message: Message): boolean {
-    return isAllowedDiscordMessage(message, this.config);
+    return isAllowedDiscordMessage(message, this.config, this.discord.user?.id);
   }
 
   private async serializeMessage(
@@ -107,6 +117,7 @@ export class DiscordGateway {
         message.member?.displayName ||
         message.author.globalName ||
         message.author.username,
+      authorIsBot: message.author.bot,
       content: message.content,
       createdAt: message.createdAt.toISOString(),
       mentionedBot: this.discord.user
@@ -192,8 +203,12 @@ export class DiscordGateway {
     const audience = this.config.discord.allowAllUsers
       ? "all non-bot users"
       : `only user ${this.config.discord.allowedUserId}`;
+    const botAudience =
+      this.config.discord.allowedBotIds.length > 0
+        ? ` plus ${this.config.discord.allowedBotIds.length} allow-listed bot(s)`
+        : "";
     console.info(
-      `Discord agent ready as ${this.discord.user?.tag ?? "unknown bot"}; accepting ${audience} in channel ${this.config.discord.channelId}`,
+      `Discord agent ready as ${this.discord.user?.tag ?? "unknown bot"}; accepting ${audience}${botAudience} in channel ${this.config.discord.channelId}`,
     );
   }
 

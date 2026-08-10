@@ -154,6 +154,22 @@ MOXN_MCP_ENABLED=true
 The MCP server uses stored renewable OAuth credentials by default. An explicit
 `MOXN_MCP_TOKEN` must be an OAuth bearer token, not a Moxn API key.
 
+## Moxn as agent memory
+
+Moxn is the assistant's durable memory layer, not just an external search tool.
+The agent can use the Context CLI to recall prior information and to create,
+update, organize, and archive memory on its own initiative. Durable facts,
+decisions, rationale, relationships, preferences, dates, and follow-ups can live
+beyond one Codex thread or Temporal summary.
+
+The memory structure is intentionally agent-maintained. The agent may evolve the
+folder and file layout, naming conventions, indexes, tag taxonomy, properties,
+metadata, and summary strategy as usage reveals a better approach. Its default
+persona instructs it to search before creating duplicates, preserve provenance,
+make broad reorganizations in recoverable steps, and verify that substantive
+content survives. Operators can narrow or replace this authority in their custom
+`AGENTS.md` persona.
+
 ## Persona and channel behavior
 
 Edit [agent/AGENTS.md](agent/AGENTS.md) to change the assistant's voice, attention

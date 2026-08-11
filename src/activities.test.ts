@@ -1,7 +1,8 @@
 import { heartbeat } from "@temporalio/activity";
 import { msToNumber } from "@temporalio/common/lib/time.js";
 import type { NativeConnection } from "@temporalio/worker";
-import type { Client } from "discord.js";
+import { EventEmitter } from "node:events";
+import { Events, type Client } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActivities, type AgentActivities } from "./activities.js";
 import type { CodexRunner } from "./codex-runner.js";
@@ -43,6 +44,7 @@ function discordWithChannel(sendTyping = vi.fn().mockResolvedValue(undefined)) {
     sendTyping,
   };
   const discord = {
+    isReady: () => true,
     channels: { fetch: vi.fn().mockResolvedValue(channel) },
   } as unknown as Client;
   return { discord, sendTyping };
@@ -85,6 +87,7 @@ describe("Temporal activity lifecycle", () => {
 
   it("clears its heartbeat when setup fails", async () => {
     const discord = {
+      isReady: () => true,
       channels: { fetch: vi.fn().mockRejectedValue(new Error("Discord down")) },
     } as unknown as Client;
     const codex = { run: vi.fn() } as unknown as CodexRunner;
@@ -96,6 +99,31 @@ describe("Temporal activity lifecycle", () => {
 
     await vi.advanceTimersByTimeAsync(AGENT_TURN_HEARTBEAT_INTERVAL_MS * 2);
     expect(heartbeat).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for Discord readiness before fetching the channel", async () => {
+    let ready = false;
+    const channel = {
+      isTextBased: () => true,
+      isDMBased: () => false,
+      sendTyping: vi.fn().mockResolvedValue(undefined),
+    };
+    const discord = Object.assign(new EventEmitter(), {
+      isReady: () => ready,
+      channels: { fetch: vi.fn().mockResolvedValue(channel) },
+    }) as unknown as Client;
+    const codex = {
+      run: vi.fn().mockResolvedValue(result),
+    } as unknown as CodexRunner;
+
+    const activity = createActivities(discord, codex).processChannelTurn(input);
+    await flushPromises();
+    expect(discord.channels.fetch).not.toHaveBeenCalled();
+
+    ready = true;
+    discord.emit(Events.ClientReady, discord as Client<true>);
+    await expect(activity).resolves.toEqual(result);
+    expect(discord.channels.fetch).toHaveBeenCalledWith(input.channelId);
   });
 
   it("gives in-flight activities a bounded deployment drain window", () => {

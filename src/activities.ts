@@ -1,5 +1,5 @@
 import { heartbeat } from "@temporalio/activity";
-import type { Client, GuildTextBasedChannel } from "discord.js";
+import { Events, type Client, type GuildTextBasedChannel } from "discord.js";
 import type { CodexRunner } from "./codex-runner.js";
 import { splitDiscordMessage } from "./discord-utils.js";
 import { AGENT_TURN_HEARTBEAT_INTERVAL_MS } from "./temporal-lifecycle.js";
@@ -8,10 +8,43 @@ import type {
   ProcessChannelTurnInput,
 } from "./types.js";
 
+const DISCORD_READY_TIMEOUT_MS = 30_000;
+
+async function waitForDiscordReady(discord: Client): Promise<void> {
+  if (discord.isReady()) return;
+
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = (): void => {
+      clearTimeout(timeout);
+      discord.off(Events.ClientReady, onReady);
+      discord.off(Events.Error, onError);
+    };
+    const onReady = (): void => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error: Error): void => {
+      cleanup();
+      reject(error);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Discord did not become ready within 30 seconds"));
+    }, DISCORD_READY_TIMEOUT_MS);
+    timeout.unref();
+
+    discord.once(Events.ClientReady, onReady);
+    discord.once(Events.Error, onError);
+    // Close the gap between the first readiness check and listener setup.
+    if (discord.isReady()) onReady();
+  });
+}
+
 async function requireTextChannel(
   discord: Client,
   channelId: string,
 ): Promise<GuildTextBasedChannel> {
+  await waitForDiscordReady(discord);
   const channel = await discord.channels.fetch(channelId);
   if (!channel?.isTextBased() || channel.isDMBased()) {
     throw new Error(`Discord channel ${channelId} is not a guild text channel`);

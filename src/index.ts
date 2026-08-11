@@ -43,20 +43,16 @@ async function main(): Promise<void> {
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 
-  let workerRun: Promise<void> | undefined;
+  const workerRun = temporal.worker.run();
   try {
-    // Connect Discord and complete its channel/backfill checks before polling
-    // Temporal. Otherwise an already queued turn can reach an Activity while
-    // Discord.js is still identifying and its channel cache is unavailable.
     await gateway.start();
-    workerRun = temporal.worker.run();
     await workerRun;
   } finally {
     discord.destroy();
     if (temporal.worker.getState() === "RUNNING") {
       temporal.worker.shutdown();
     }
-    await workerRun?.catch(() => undefined);
+    await workerRun.catch(() => undefined);
     await temporal.close();
   }
 }

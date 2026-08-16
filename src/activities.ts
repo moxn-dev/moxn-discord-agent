@@ -88,17 +88,32 @@ export function createActivities(discord: Client, codex: CodexRunner) {
       const channel = await requireTextChannel(discord, input.channelId);
       const targetMessageId =
         action.replyToMessageId || input.triggeringMessageId;
-      const target = await channel.messages.fetch(targetMessageId);
+      // A public Discord thread created from a message has the starter
+      // message's ID. That starter belongs to the parent channel and cannot be
+      // fetched from the thread's message collection.
+      const targetsThreadStarter =
+        channel.isThread() && targetMessageId === channel.id;
 
       if (action.disposition === "react") {
+        let targetChannel = channel;
+        if (targetsThreadStarter) {
+          if (!channel.parentId) {
+            throw new Error(`Discord thread ${channel.id} has no parent channel`);
+          }
+          targetChannel = await requireTextChannel(discord, channel.parentId);
+        }
+        const target = await targetChannel.messages.fetch(targetMessageId);
         if (action.reaction) await target.react(action.reaction);
         return;
       }
 
+      const target = targetsThreadStarter
+        ? null
+        : await channel.messages.fetch(targetMessageId);
       const chunks = splitDiscordMessage(action.message || "");
       for (const [index, content] of chunks.entries()) {
         const nonce = `${input.triggeringMessageId}-${index}`;
-        if (index === 0) {
+        if (index === 0 && target) {
           await target.reply({
             content,
             allowedMentions: { parse: [], repliedUser: false },

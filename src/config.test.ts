@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadConfig } from "./config.js";
+import {
+  loadConfig,
+  registryWorkflowIdForChannel,
+  workflowIdForChannel,
+  workflowIdForThreadSession,
+} from "./config.js";
 
 const requiredEnvironment = {
   DISCORD_BOT_TOKEN: "discord-test-token",
@@ -25,6 +30,8 @@ describe("configuration", () => {
     vi.stubEnv("CODEX_REASONING_EFFORT", "");
     vi.stubEnv("CODEX_SANDBOX_MODE", "");
     vi.stubEnv("CODEX_WEB_SEARCH_MODE", "");
+    vi.stubEnv("CODEX_HOME", "");
+    vi.stubEnv("AGENT_MAX_CONCURRENT_ACTIVITIES", "");
     vi.stubEnv("AGENT_DATA_DIR", "/tmp/moxn-discord-agent-test");
   });
 
@@ -78,6 +85,38 @@ describe("configuration", () => {
     expect(() => loadConfig()).toThrow(/CODEX_WEB_SEARCH_MODE/);
   });
 
+  it("limits concurrent Temporal activities to four by default", () => {
+    expect(loadConfig().temporal.maxConcurrentActivities).toBe(4);
+  });
+
+  it("accepts an explicit positive Temporal activity limit", () => {
+    vi.stubEnv("AGENT_MAX_CONCURRENT_ACTIVITIES", "3");
+    expect(loadConfig().temporal.maxConcurrentActivities).toBe(3);
+  });
+
+  it("rejects an invalid Temporal activity limit", () => {
+    vi.stubEnv("AGENT_MAX_CONCURRENT_ACTIVITIES", "0");
+    expect(() => loadConfig()).toThrow(/AGENT_MAX_CONCURRENT_ACTIVITIES/);
+  });
+
+  it("derives all private runtime paths from a provider-mounted data path", () => {
+    vi.stubEnv("AGENT_DATA_DIR", "/mnt/persistent/alpha");
+    vi.stubEnv("AGENT_WORKSPACE", "");
+    const config = loadConfig();
+    expect(config.local.dataDirectory).toBe("/mnt/persistent/alpha");
+    expect(config.local.codexHome).toBe("/mnt/persistent/alpha/codex");
+    expect(config.local.agentWorkspace).toBe(
+      "/mnt/persistent/alpha/workspace",
+    );
+  });
+
+  it("honors an explicit persistent Codex home", () => {
+    vi.stubEnv("CODEX_HOME", "/mnt/persistent/codex-home");
+    expect(loadConfig().local.codexHome).toBe(
+      "/mnt/persistent/codex-home",
+    );
+  });
+
   it("supports a channel-wide Discord allow-list without a user ID", () => {
     vi.stubEnv("DISCORD_ALLOW_ALL_USERS", "true");
     vi.stubEnv("DISCORD_ALLOWED_USER_ID", "");
@@ -104,5 +143,15 @@ describe("configuration", () => {
   it("requires the Context CLI API key", () => {
     vi.stubEnv("MOXN_API_KEY", "");
     expect(() => loadConfig()).toThrow(/MOXN_API_KEY/);
+  });
+
+  it("uses stable, distinct Workflow IDs for the registry and sessions", () => {
+    expect(workflowIdForChannel("200")).toBe("moxn-discord-channel-200");
+    expect(registryWorkflowIdForChannel("200")).toBe(
+      "moxn-discord-registry-200",
+    );
+    expect(workflowIdForThreadSession("200", "201")).toBe(
+      "moxn-discord-channel-200-thread-201",
+    );
   });
 });

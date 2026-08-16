@@ -31,3 +31,45 @@ export function compareDiscordSnowflakes(left: string, right: string): number {
   const rightValue = BigInt(right);
   return leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0;
 }
+
+export interface SessionCommand {
+  type: "task" | "fork";
+  request: string;
+}
+
+/**
+ * Session creation is deliberately explicit: the bot mention must be first,
+ * followed by exactly `task` or `fork` and a non-empty request.
+ */
+export function parseSessionCommand(
+  content: string,
+  botUserId: string,
+): SessionCommand | null {
+  const trimmed = content.trimStart();
+  const plainMention = `<@${botUserId}>`;
+  const nicknameMention = `<@!${botUserId}>`;
+  const mention = trimmed.startsWith(plainMention)
+    ? plainMention
+    : trimmed.startsWith(nicknameMention)
+      ? nicknameMention
+      : null;
+  if (!mention) return null;
+
+  const remainder = trimmed.slice(mention.length).trim();
+  const match = /^(task|fork)(?:\s+([\s\S]+))?$/i.exec(remainder);
+  const request = match?.[2]?.trim();
+  if (!match || !request) return null;
+  return { type: match[1]!.toLowerCase() as SessionCommand["type"], request };
+}
+
+export function discordThreadName(command: SessionCommand): string {
+  const compactRequest = command.request
+    .replaceAll(/<@!?\d+>/g, "")
+    .replaceAll(/[`*_~|>#]+/g, " ")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  const prefix = `${command.type} · `;
+  const available = 100 - prefix.length;
+  const title = compactRequest.slice(0, available).trim();
+  return `${prefix}${title || "untitled"}`;
+}

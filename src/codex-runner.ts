@@ -1,5 +1,6 @@
 import { Codex, type UserInput } from "@openai/codex-sdk";
-import { delimiter } from "node:path";
+import { copyFile, mkdir } from "node:fs/promises";
+import { delimiter, join } from "node:path";
 import type { AgentConfig } from "./config.js";
 import type {
   AgentTurnResult,
@@ -84,21 +85,42 @@ function renderMessage(message: DiscordChannelMessage): string {
 }
 
 export function buildAgentPrompt(input: ProcessChannelTurnInput): string {
+  const sessionType = input.sessionType ?? "main";
   const previousContext = input.recentMessages
     .slice(-20)
     .map(renderMessage)
     .join("\n\n");
   const newMessages = input.messages.map(renderMessage).join("\n\n");
+  const sessionGuidance =
+    sessionType === "main"
+      ? "This is Alpha's long-lived main channel session."
+      : sessionType === "task"
+        ? "This is an independent task thread with fresh conversational context. Moxn remains shared durable knowledge, so search it when useful."
+        : "This is an independent fork of Alpha's main session. Its source snapshot is frozen at creation; later main-channel conversation does not automatically enter this thread.";
+  const forkSource = input.forkContext
+    ? [
+        `Fork source: ${input.forkContext.sourceSessionId} revision ${input.forkContext.sourceRevision}, captured ${input.forkContext.capturedAt}.`,
+        `Source rolling summary:\n${input.forkContext.rollingSummary || "(none yet)"}`,
+        `Source recent messages:\n${
+          input.forkContext.recentMessages
+            .slice(-20)
+            .map(renderMessage)
+            .join("\n\n") || "(none)"
+        }`,
+      ].join("\n\n")
+    : null;
 
   return [
-    "You are receiving one durable turn from your private Discord channel.",
+    "You are receiving one durable turn from a private Discord conversation.",
+    sessionGuidance,
     "Follow AGENTS.md and use Moxn tools when context or an action calls for them.",
     "Choose reply, react, or silent. A reply must be useful and ready to post verbatim.",
     "Use only a single standard Unicode emoji for a reaction.",
     "Keep updatedSummary compact (under 1,500 characters), durable, and focused on facts/follow-ups that will matter in later channel turns.",
     "Do not put operational commentary or JSON in message.",
+    ...(forkSource ? ["", forkSource] : []),
     "",
-    `Rolling channel summary:\n${input.rollingSummary || "(none yet)"}`,
+    `Rolling session summary:\n${input.rollingSummary || "(none yet)"}`,
     "",
     `Recent messages before this turn:\n${previousContext || "(none)"}`,
     "",
@@ -202,13 +224,37 @@ export class CodexRunner {
     });
   }
 
+  private async sessionWorkspace(
+    input: ProcessChannelTurnInput,
+  ): Promise<string> {
+    const sessionType = input.sessionType ?? "main";
+    if (sessionType === "main") {
+      return this.config.local.agentWorkspace;
+    }
+    const safeSessionId = (input.sessionId ?? "unknown")
+      .replaceAll(/[^a-zA-Z0-9_-]+/g, "-")
+      .slice(0, 120);
+    const workspace = join(
+      this.config.local.agentWorkspace,
+      "sessions",
+      `${sessionType}-${safeSessionId || "unknown"}`,
+    );
+    await mkdir(workspace, { recursive: true, mode: 0o700 });
+    await copyFile(
+      this.config.local.personaTemplate,
+      join(workspace, "AGENTS.md"),
+    );
+    return workspace;
+  }
+
   async run(input: ProcessChannelTurnInput): Promise<AgentTurnResult> {
+    const workingDirectory = await this.sessionWorkspace(input);
     const threadOptions = {
       ...(this.config.codex.model ? { model: this.config.codex.model } : {}),
       ...(this.config.codex.reasoningEffort
         ? { modelReasoningEffort: this.config.codex.reasoningEffort }
         : {}),
-      workingDirectory: this.config.local.agentWorkspace,
+      workingDirectory,
       skipGitRepoCheck: true,
       sandboxMode: this.config.codex.sandboxMode,
       // The pinned Context CLI needs outbound access to Moxn. Web search is a

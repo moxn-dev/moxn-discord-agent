@@ -31,6 +31,10 @@ export function createWorkerOptions(
       new URL("./workflows/channel-session.js", import.meta.url),
     ),
     activities,
+    // Keep additional work durably queued in Temporal instead of allowing its
+    // development default (100) to spawn an unsafe number of Codex processes.
+    maxConcurrentActivityTaskExecutions:
+      config.temporal.maxConcurrentActivities,
     shutdownGraceTime: WORKER_SHUTDOWN_GRACE_TIME,
     shutdownForceTime: WORKER_SHUTDOWN_FORCE_TIME,
   };

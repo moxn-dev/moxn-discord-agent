@@ -1,10 +1,11 @@
 # Moxn Discord Agent
 
 A Discord assistant powered by Codex, Temporal Cloud, and Moxn Context OS. It
-watches one private Discord channel, maintains one durable
-channel-level conversation, understands image attachments, and can read or write
-Moxn through the published Context CLI. Codex can authenticate with either a
-ChatGPT subscription or an OpenAI Platform API key.
+watches one private Discord channel, maintains a durable main conversation plus
+independent task and fork sessions in Discord threads, understands image
+attachments, and can read or write Moxn through the published Context CLI. Codex
+can authenticate with either a ChatGPT subscription or an OpenAI Platform API
+key.
 
 This is an open-source personal-assistant baseline. It is intentionally not a
 multi-user authorization system or hardened multi-tenant sandbox.
@@ -12,16 +13,15 @@ multi-user authorization system or hardened multi-tenant sandbox.
 ## Architecture
 
 ```text
-Discord Gateway ──► Node worker ──► Temporal Cloud
-                       │             durable queue, checkpoint,
-                       │             summary, and Codex thread ID
-                       │
-                       ├──► Codex SDK ──► ChatGPT subscription or OpenAI API
-                       │        │
-                       │        ├──► context CLI ──► Moxn
-                       │        └──► optional stdio Moxn MCP
-                       │
-                       └──► persistent attachment inbox + Codex state
+Discord Gateway ──► channel registry ──► main session workflow
+       │                  │              task session workflow(s)
+       │                  └─────────────► fork session workflow(s)
+       │                                      │
+       └── Discord threads ◄──────────────────┘
+                                              │
+                                              ├──► Codex SDK
+                                              ├──► context CLI / stdio MCP
+                                              └──► persistent local state
 ```
 
 Temporal Cloud stores orchestration state; it does not host the Worker or the
@@ -35,9 +35,14 @@ does not need a public HTTP port.
   all non-bot channel participants through an explicit opt-in.
 - Optional explicit allow-list for trusted peer bots; the agent always rejects
   its own messages.
-- No mention required; Codex chooses whether to reply, react, or stay silent.
-- One durable channel workflow and one resumable Codex thread.
-- Startup backfill for messages received while the process was offline.
+- No mention required in the main channel; Codex chooses whether to reply,
+  react, or stay silent.
+- `@alpha task <request>` starts a fresh session in a Discord thread.
+- `@alpha fork <request>` starts an independent thread seeded from a bounded,
+  revisioned snapshot of the main session.
+- One durable Temporal workflow and resumable Codex thread per session, allowing
+  different sessions to run concurrently while preserving ordering within each.
+- Startup backfill for the parent channel and every registered open thread.
 - Direct image input plus local-file uploads to Moxn.
 - Optional live Codex web search for public research.
 - Context CLI installed as a pinned npm dependency; no global install required.
@@ -62,8 +67,9 @@ In the [Discord Developer Portal](https://discord.com/developers/applications):
 
 1. Create an application and bot.
 2. Enable the **Message Content Intent**.
-3. Install the bot with View Channel, Send Messages, Read Message History, and
-   Add Reactions permissions. Do not grant Administrator.
+3. Install the bot with View Channel, Send Messages, Send Messages in Threads,
+   Create Public Threads, Read Message History, and Add Reactions permissions.
+   Do not grant Administrator.
 4. Enable Discord Developer Mode and copy the server, channel, and permitted user
    IDs.
 
@@ -156,7 +162,10 @@ Agent turns may run for up to 30 minutes. While a turn is active, the Worker
 heartbeats every 10 seconds; Temporal considers it lost after 45 seconds without
 a heartbeat. Container shutdown drains an in-flight turn for up to five minutes
 before forcing recovery, so use the provided Compose stop grace period or give a
-manual `docker stop` at least 330 seconds.
+manual `docker stop` at least 330 seconds. The Worker accepts at most four
+Activities concurrently by default; additional turns remain durably queued in
+Temporal. Override this small-deployment safety limit with
+`AGENT_MAX_CONCURRENT_ACTIVITIES`.
 
 ### 4. Verify and run
 
@@ -171,6 +180,31 @@ later runs, use `npm start` after building.
 
 The first launch checkpoints the newest existing Discord message rather than
 replaying the entire channel. Send a fresh message to begin.
+
+## Main, task, and fork sessions
+
+Ordinary admitted messages in the configured parent channel flow to Alpha's
+long-lived `main` session. Session commands must start with a direct bot mention
+and contain a non-empty request:
+
+```text
+@alpha task Research the upcoming Luma event and summarize it
+@alpha fork Explore the alternative we were just discussing
+```
+
+`task` starts with fresh conversational context. `fork` starts a new Codex
+thread seeded from main Alpha's rolling summary and twenty most recent completed
+messages, with a source revision and timestamp. The fork then diverges: later
+main-channel messages are not synchronized into it. Every admitted message and
+attachment posted inside the resulting Discord thread continues that session;
+no mention or command prefix is required there.
+
+Session-creation commands are recognized only in the configured parent channel.
+Other Discord threads are ignored. Moxn access and memory are shared across all
+sessions, so conversational isolation is not a separate authorization boundary.
+Moxn rejects writes based on a stale file revision. An agent should reread and
+reconcile after a conflict; agents intentionally collaborating on the same
+content should use Moxn branches and pull requests.
 
 ## Moxn tools and attachments
 
@@ -218,7 +252,8 @@ Edit [agent/AGENTS.md](agent/AGENTS.md) to change the assistant's voice, attenti
 policy, and Moxn workflow. Startup copies it into the private runtime workspace.
 Restart after changing the file.
 
-The agent receives every admitted human message in the configured channel.
+The agent receives every admitted human message in the configured channel and
+its registered session threads.
 Direct mentions always get a response; other direct questions normally do,
 while ambient notes may receive a reaction or no response. By default only
 `DISCORD_ALLOWED_USER_ID` is admitted. Set `DISCORD_ALLOW_ALL_USERS=true` to use
@@ -234,14 +269,25 @@ Discord bot token.
 
 - `codex/`: isolated ChatGPT or API-key credentials and Codex sessions;
 - `workspace/`: runtime `AGENTS.md` and agent scratch space;
+- `workspace/sessions/`: isolated scratch directories for task and fork
+  sessions;
 - `inbox/`: downloaded Discord attachments.
 
 The directory is private runtime state, not source code. Back it up carefully and
 mount it on a persistent volume when deploying.
 
-Temporal history contains Discord message text and metadata, local attachment
-paths, the rolling summary, and the Codex thread ID. It does not contain service
-tokens or attachment bytes.
+In the provided container, `/data` is only the default path *inside the
+container*. Docker Compose supplies a Docker-managed named volume; it does not
+assume that the host has a `/data` directory. A cloud platform may mount EBS,
+EFS, or its own persistent volume at `/data`, or mount it elsewhere and set
+`AGENT_DATA_DIR` to that path. The container runs as UID/GID 1000, so a custom
+mount must grant that identity read/write access. Codex home and workspace paths
+default beneath `AGENT_DATA_DIR`; an explicit `CODEX_HOME` or `AGENT_WORKSPACE`
+overrides the corresponding default.
+
+Temporal history contains the channel registry, Discord message text and
+metadata, fork snapshots, local attachment paths, rolling summaries, and Codex
+thread IDs. It does not contain service tokens or attachment bytes.
 
 ## Deployment
 
@@ -255,7 +301,8 @@ process with long-lived outbound connections.
 
 ## Security notes
 
-- Run exactly one replica.
+- Run exactly one Discord Gateway replica. Its Temporal Worker can execute turns
+  from independent sessions concurrently.
 - Keep the Discord channel private. Retain the single-user default unless every
   participant in that channel is trusted to invoke the agent and its Moxn access.
 - Allow-list peer bots sparingly. Two agents that reflexively answer each other
@@ -279,10 +326,10 @@ npm run secrets:scan -- --history
 docker build -t moxn-discord-agent .
 ```
 
-The workflow deliberately does not retry Codex/Moxn turns: a remote write may
-have succeeded before an interrupted Activity reports completion. Discord
-delivery retries three times with deterministic nonces. See [DESIGN.md](DESIGN.md)
-for the durability and failure model.
+The session workflows deliberately do not retry Codex/Moxn turns: a remote write
+may have succeeded before an interrupted Activity reports completion. Discord
+delivery retries three times with deterministic nonces. See
+[DESIGN.md](DESIGN.md) for the durability and failure model.
 
 ## License
 

@@ -141,6 +141,7 @@ export interface AgentConfig {
     namespace: string;
     apiKey: string;
     taskQueue: string;
+    maxConcurrentActivities: number;
   };
   moxn: {
     apiKey: string;
@@ -200,6 +201,10 @@ export function loadConfig(): AgentConfig {
       apiKey: required("TEMPORAL_API_KEY"),
       taskQueue:
         process.env.TEMPORAL_TASK_QUEUE?.trim() || "moxn-discord-agent",
+      maxConcurrentActivities: positiveInteger(
+        "AGENT_MAX_CONCURRENT_ACTIVITIES",
+        4,
+      ),
     },
     moxn: {
       apiKey: required("MOXN_API_KEY"),
@@ -228,7 +233,9 @@ export function loadConfig(): AgentConfig {
       agentWorkspace: resolve(
         optional("AGENT_WORKSPACE") || resolve(dataDirectory, "workspace"),
       ),
-      codexHome: resolve(dataDirectory, "codex"),
+      codexHome: resolve(
+        optional("CODEX_HOME") || resolve(dataDirectory, "codex"),
+      ),
       personaTemplate: resolve(
         optional("AGENT_PERSONA_FILE") ||
           resolve(packageDirectory, "agent", "AGENTS.md"),
@@ -240,4 +247,15 @@ export function loadConfig(): AgentConfig {
 
 export function workflowIdForChannel(channelId: string): string {
   return `moxn-discord-channel-${channelId}`;
+}
+
+export function registryWorkflowIdForChannel(channelId: string): string {
+  return `moxn-discord-registry-${channelId}`;
+}
+
+export function workflowIdForThreadSession(
+  parentChannelId: string,
+  threadId: string,
+): string {
+  return `moxn-discord-channel-${parentChannelId}-thread-${threadId}`;
 }

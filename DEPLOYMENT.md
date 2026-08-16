@@ -6,6 +6,17 @@ Run the provided Docker image as exactly one continuously running process with a
 persistent volume mounted at `/data`. The service needs outbound HTTPS plus the
 Discord Gateway connection, but no inbound application port.
 
+`/data` is a logical path inside the image, not an assumed directory on the
+deployment host. The application requires a private, persistent POSIX
+filesystem somewhere because Codex login/session files and downloaded
+attachments are file-backed. Mount the provider's durable storage at `/data`,
+or mount it at another container path and set `AGENT_DATA_DIR` accordingly;
+the default `CODEX_HOME` and workspace are derived beneath it. When invoking the
+Codex CLI directly for login against a custom path, also set `CODEX_HOME` to the
+derived `codex` directory. The image runs as the unprivileged `node` user
+(UID/GID 1000). `/data` is prepared for that user; any different mount target
+must be provisioned with matching ownership or read/write permissions.
+
 For a personal deployment, a small Linux VM is the clearest default:
 
 1. **AWS Lightsail Instance or EC2 + Docker Compose** — recommended reference
@@ -16,7 +27,8 @@ For a personal deployment, a small Linux VM is the clearest default:
    provider's secret store.
 3. **ECS/Fargate** — viable when the operator already uses AWS container
    infrastructure, but persistent Codex state requires EFS or another durable
-   mount. It is unnecessary complexity for one assistant.
+   mount exposed as a normal container filesystem. It is unnecessary complexity
+   for one assistant.
 
 Do not use Vercel Functions, Lambda-style request handlers, or any platform that
 sleeps the process when HTTP traffic is absent. Discord Gateway and Temporal task
@@ -30,6 +42,11 @@ Create `.env`, then build the image:
 cp .env.example .env
 docker compose build
 ```
+
+The included Compose file uses the `agent-data` named volume. Docker chooses its
+host location and mounts it at `/data`; no host `/data` directory is required.
+For an explicit host bind mount, replace `agent-data:/data` with a narrow private
+directory such as `/srv/moxn-discord-agent:/data`.
 
 Set `CODEX_SANDBOX_MODE=danger-full-access` in `.env` for the containerized
 worker. This disables Codex's nested Bubblewrap sandbox, which ordinary Docker
@@ -145,7 +162,22 @@ reboots. Back up the `agent-data` volume as sensitive material.
 
 The same Docker Compose flow works on a small Ubuntu or Debian EC2 instance.
 Prefer Lightsail for this experiment unless you already need EC2 networking,
-IAM, or attached-storage controls.
+IAM, or attached-storage controls. The Compose named volume persists across
+container replacement but lives on that instance's disk. For stronger instance
+lifecycle independence, mount an encrypted EBS filesystem at a private host
+directory and bind that directory to `/data`.
+
+## ECS/Fargate
+
+Mount an encrypted EFS access point into the task at `/data`. Configure the
+access point's POSIX identity and root-directory ownership for UID/GID 1000 so
+the image's unprivileged `node` user can write it. If a different container path
+is required, set `AGENT_DATA_DIR` to it and provide the same permissions. Run one
+desired task, set `CODEX_HOME=<AGENT_DATA_DIR>/codex` for direct login commands,
+and inject configuration through Secrets Manager or SSM Parameter Store. Do not
+use Fargate ephemeral storage for `AGENT_DATA_DIR`: replacing the task would
+discard Codex authentication, resumable thread files, scratch state, and
+attachments. The task needs no load balancer or inbound port.
 
 ## Railway
 
